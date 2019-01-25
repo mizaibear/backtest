@@ -10,6 +10,7 @@ mpl.rcParams['font.sans-serif'] = 'SimHei'
 
 def show(df):
     fig, ax = plt.subplots(figsize=(16, 9))  # 指定画布大小
+    # df.index = pd.to_datetime(df.index)
     df.plot(ax=ax)  # 调用DataFrame的plot方法画出折线图
     plt.show()
 
@@ -22,7 +23,7 @@ def total_return(values):
 # 年化收益
 def annual_return(values):
     total = values.values[-1] / values.values[0]
-    return np.power(total, 250 / len(values)) - 1
+    return np.power(total, 252 / len(values)) - 1
 
 
 # 最大回撤
@@ -30,6 +31,24 @@ def max_drawdown(values):
     exp_max = values.expanding().max()
     drawdown = (values / exp_max) - 1
     return drawdown.min()  # 最大回撤是负数，所以取最小值
+
+
+# 夏普比率
+def sharpe_ratio(values):
+    daily_return = values.pct_change(1)
+    return daily_return.mean() / daily_return.std() * np.sqrt(252)
+
+
+# 年化换手
+def annual_change(records):
+    daily_change_rate = records['成交额'] / records['净值']
+    return daily_change_rate.mean() * 252
+
+
+# 总费用占净值比
+def total_commision_rate(records):
+    return records['手续费'].sum() / records['净值'].iloc[-1]
+
 
 
 class Report(object):
@@ -50,12 +69,16 @@ class Report(object):
             '相对基准收益%': f'{(self._summary["总收益率"]-self._summary["基准收益率"])*100:.2f}',
             '年化收益%': f'{self._summary["年化收益率"]*100:.2f}',
             '最大回撤%': f'{self._summary["最大回撤"]*100:.2f}',
-            '基准收益%': f'{self._summary["基准收益率"]*100:.2f}'
+            '夏普比值': f'{self._summary["夏普比值"]:.2f}',
+            '基准收益%': f'{self._summary["基准收益率"]*100:.2f}',
+            '年化换手%': f'{self._summary["年化换手"]*100:.2f}',
+            '手续费占净值比%': f'{self._summary["手续费占净值比"]*100:.2f}'
         }
 
     def show(self):
         print(self)  # 打印绩效信息
-        records = self._records / self._records.iloc[0]
+        records = self._records[['净值', 'benchmark']]
+        records /= records.iloc[0]
         show(records)  # 显示资金曲线图
 
     def create_summary(self):
@@ -65,9 +88,12 @@ class Report(object):
         summary['总收益率'] = total_return(values)
         summary['年化收益率'] = annual_return(values)
         summary['最大回撤'] = max_drawdown(values)
+        summary['夏普比值'] = sharpe_ratio(values)
         summary['基准收益率'] = total_return(benchmark)
         summary['基准年化收益率'] = annual_return(benchmark)
         summary['基准最大回撤'] = max_drawdown(benchmark)
+        summary['年化换手'] = annual_change(self._records)
+        summary['手续费占净值比'] = total_commision_rate(self._records)
         return summary
 
     def show_hedge(self):

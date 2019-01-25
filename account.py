@@ -9,9 +9,11 @@ class Account(object):
         # 初始化账户的基础状态
         self._cash = init_cash  # 账户的初始现金默认100万
         self._holdings = {}  # 账户的持仓,用字典记录每个股票持仓
-        self._date = None  # 更新持仓数据的日期
+        self._date = None  # 当前日期
+        self._amount = 0  # 当日交易额
+        self._commision = 0  # 当日手续费
         self._records = []  # 账户的序列记录，用字典记录包括日期、净值
-        self.data = data  # 数据源
+        self.data = data
 
     def holding_value(self):
         # 持仓市值
@@ -46,14 +48,25 @@ class Account(object):
             price = self.get_price(code)  # 获取当前价格来更新
             self.update_price(code, price)
 
+        # 初始化当日交易额和手续费
+        self._amount = 0
+        self._commision = 0
+
     def write_record(self):
-        item = {'日期': self._date, '净值': self.portfolio_value()}
+        item = {
+            '日期': self._date,
+            '净值': self.portfolio_value(),
+            '现金': self._cash,
+            '成交额': self._amount,
+            '手续费': self._commision,
+            '持仓数': len(self._holdings)
+        }
         self._records.append(item)
 
     def create_report(self, benchmark):
         df = pd.DataFrame(self._records).set_index('日期')
         # 获取指数行情作为对照基准
-        bm_daily = self.data.get_daily(benchmark, index=True)
+        bm_daily = self.data.get_index_daily(benchmark)
         df['benchmark'] = bm_daily['close']
         return Report(df)
 
@@ -99,3 +112,22 @@ class Account(object):
             # 如果持仓为0就删掉
             if item['qty'] == 0:
                 del self._holdings[code]
+
+        # 记录增加当日交易额和手续费
+        self._amount += abs(order_value)
+        self._commision += commision
+
+
+class IndexAccount(Account):
+    def __init__(self, init_cash=1000000, data=None):
+        super().__init__(init_cash, data)
+
+    def get_price(self, code):
+        df = self.get_bars(code)
+        if len(df) == 0:
+            return None
+        return df['close'].values[-1]
+
+    def get_bars(self, code):
+        df = self.data.get_index_daily(index_code=code)
+        return df.loc[:self._date]
