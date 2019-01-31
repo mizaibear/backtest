@@ -14,6 +14,11 @@ class Account(object):
         self._commision = 0  # 当日手续费
         self._records = []  # 账户的序列记录，用字典记录包括日期、净值
         self.data = data
+        self._holding_cost = {}  # 记录持仓成本总额
+        self._sell_win = 0  # 盈利卖出数
+        self._sell_lose = 0  # 亏损卖出数
+        self._sell_win_amount = 0  # 卖出盈利额
+        self._sell_lose_amount = 0  # 卖出亏损额
 
     def holding_value(self):
         # 持仓市值
@@ -59,7 +64,11 @@ class Account(object):
             '现金': self._cash,
             '成交额': self._amount,
             '手续费': self._commision,
-            '持仓数': len(self._holdings)
+            '持仓数': len(self._holdings),
+            '盈利卖出笔数': self._sell_win,
+            '亏损卖出笔数': self._sell_lose,
+            '卖出盈利额': self._sell_win_amount,
+            '卖出亏损额': self._sell_lose_amount
         }
         self._records.append(item)
 
@@ -88,11 +97,16 @@ class Account(object):
     def order(self, code, price, qty):
         # 下单
         order_value = price * qty  # 交易额，qty为正就是买，qty为负就是卖
+        if order_value == 0:
+            # 如果下单价值为0，不执行操作
+            print(f'debug - {code} {price} {qty} order_value zero.')
+            return
+
         commision = self.get_commision(order_value)
         cost = order_value + commision  # 支出等于交易额+费用
         # 检查现金和持仓数量是否超支
         if self._cash - cost < 0:
-            raise Exception(f'{self._date}:现金不足支出：{cost}\n现金：{self._cash}')
+            raise Exception(f'{self._date}:现金不足支出：{order_value} + {commision}\n现金：{self._cash}')
 
         hold_qty = 0
         if code in self._holdings:
@@ -103,6 +117,26 @@ class Account(object):
             raise Exception(f'{self._date}:持仓余额不足：{qty}')
 
         # 现金和持仓都足够，可以确认交易完成
+        # 根据持仓成本计算盈亏
+        if code not in self._holding_cost:
+            self._holding_cost[code] = 0
+
+        if qty > 0:  # 买入时记录成本
+            self._holding_cost[code] += cost
+        else:  # 卖出时判断盈亏，增加卖出笔数
+            avg_cost = self._holding_cost[code] / self._holdings[code]['qty']
+            balance = avg_cost * qty
+            gains = balance - cost  # 获利额度，注意cost和balance都应是负数
+            if gains > 0:
+                self._sell_win += 1
+                self._sell_win_amount += gains
+            else:
+                self._sell_lose += 1
+                self._sell_lose_amount += gains
+            # 卖出后成本加上保本卖出额
+            self._holding_cost[code] += balance  # 注意，balance是负的，因为卖出时qty为负数
+
+        # 处理现金和持仓变化
         self._cash -= cost
         if code not in self._holdings:
             self._holdings[code] = {'code': code, 'qty': qty, 'price': price}

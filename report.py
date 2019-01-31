@@ -50,6 +50,25 @@ def total_commision_rate(records):
     return records['手续费'].sum() / records['净值'].iloc[-1]
 
 
+# 胜率
+def winning_rate(records):
+    rate = records['盈利卖出笔数'] / (records['亏损卖出笔数'] + records['盈利卖出笔数'])
+    return rate.iloc[-1]
+
+
+# 总盈亏比
+def total_win_to_lose(records):
+    rate = records['卖出盈利额'] / np.abs(records['卖出亏损额'])
+    return rate.iloc[-1]
+
+
+# 平均盈亏比
+def avg_win_to_lose(records):
+    avg_win = records['卖出盈利额'] / records['盈利卖出笔数']
+    avg_lose = np.abs(records['卖出亏损额']) / records['亏损卖出笔数']
+    rate = avg_win / avg_lose
+    return rate.iloc[-1]
+
 
 class Report(object):
     def __init__(self, records):
@@ -69,6 +88,9 @@ class Report(object):
             '相对基准收益%': f'{(self._summary["总收益率"]-self._summary["基准收益率"])*100:.2f}',
             '年化收益%': f'{self._summary["年化收益率"]*100:.2f}',
             '最大回撤%': f'{self._summary["最大回撤"]*100:.2f}',
+            '胜率%': f'{self._summary["胜率"]*100:.2f}',
+            '总盈亏比': f'{self._summary["总盈亏比"]:.2f}',
+            '每笔盈亏比': f'{self._summary["每笔盈亏比"]:.2f}',
             '夏普比值': f'{self._summary["夏普比值"]:.2f}',
             '基准收益%': f'{self._summary["基准收益率"]*100:.2f}',
             '年化换手%': f'{self._summary["年化换手"]*100:.2f}',
@@ -94,6 +116,9 @@ class Report(object):
         summary['基准最大回撤'] = max_drawdown(benchmark)
         summary['年化换手'] = annual_change(self._records)
         summary['手续费占净值比'] = total_commision_rate(self._records)
+        summary['胜率'] = winning_rate(self._records)
+        summary['总盈亏比'] = total_win_to_lose(self._records)
+        summary['每笔盈亏比'] = avg_win_to_lose(self._records)
         return summary
 
     def show_hedge(self):

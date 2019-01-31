@@ -1,5 +1,5 @@
-from .pickle_cache import PickleCache, CacheManager
-from .ts_db import TsDatabase
+from data.pickle_cache import PickleCache, CacheManager
+from data.ts_db import TsDatabase
 
 
 class CacheData(object):
@@ -44,6 +44,29 @@ class CacheData(object):
         # 获取某个交易日的前复权行情
         df = self.get_daily_adj(code)
         return df.loc[:date]
+
+    def get_fins(self, code, api_name, trade_date, limit_time=60 / 80):
+        key = 'fins'
+        cache = self.get_cache(key)
+
+        if not cache.has(code):
+            fins = {}
+            cache.set(code, fins)
+
+        fins = cache.get(code)
+        if api_name not in fins:
+            df = self.database.query_by_api(api_name, query={'ts_code': code}, limit_time=limit_time)
+            if df is not None:
+                df = df.set_index('ann_date', drop=False).sort_index()
+            fins[api_name] = df
+            cache.set(code, fins)
+
+        df = fins[api_name]
+
+        if df is None:
+            return None
+
+        return df[df['ann_date'] <= trade_date]
 
     def get_daily(self, code):
         # 获取个股行情
@@ -101,6 +124,16 @@ class CacheData(object):
 
         return cache.get(index_code)
 
+    def get_index_dailybasic(self, index_code):
+        key = 'index_dailybasic'
+        cache = self.get_cache(key)
+
+        if not cache.has(index_code):
+            df = self.database.get_index_dailybasic(index_code)
+            cache.set(index_code, df)
+
+        return cache.get(index_code)
+
     def get_index_weight(self, index_code, trade_date):
         key = 'index_weight'
         cache = self.get_cache(key)
@@ -114,3 +147,19 @@ class CacheData(object):
             index_weight[trade_date] = self.database.get_index_weight(index_code, trade_date)
 
         return index_weight[trade_date]
+
+    def get_stock_basic(self):
+        key = 'stock_basic'
+        cache = self.get_cache(key)
+
+        if not cache.has(key):
+            df = self.database.get_stock_basic()
+            cache.set(key, df)
+
+        return cache.get(key)
+
+
+if __name__ == '__main__':
+    data = CacheData()
+    df = data.get_fins('600000.SH', 'income', '20190129')
+    print(df.tail())
